@@ -72,17 +72,23 @@ try {
   const labels = w.cols.map((c) => (c.label || '').trim().toLowerCase());
   const iD = idx(labels, 'data');
   const iS = idx(labels, 'série', 'serie', 'títu', 'titu', 'o qu');
-  const iE = idx(labels, 'epis', 'ep');
-  // gviz cai na primeira aba quando "Assistimos" não existe — só aceita se as colunas baterem
-  if (iD < 0 || iS < 0 || idx(labels, 'dura') >= 0) {
-    throw new Error('aba não encontrada ou sem as colunas Data/Série');
-  }
+  const iE = idx(labels, 'epis');
+  const iT = idx(labels, 'tempo', 'temp', 'season');
+  const iDurW = idx(labels, 'dura', 'min');
+  // "Série" só existe nesta aba — se não achou, gviz caiu na aba de chamadas
+  if (iD < 0 || iS < 0) throw new Error('aba não encontrada ou sem as colunas Data/Série');
+  const num = (c) => { const n = parseFloat(str(c).replace(',', '.')); return Number.isFinite(n) ? n : ''; };
   for (const r of w.rows || []) {
     const c = r.c || [];
     const date = dt(c[iD]);
     const serie = str(c[iS]).trim();
     if (!date || !serie) continue;
-    watched.push({ date, serie, ep: str(c[iE]).trim() });
+    watched.push({
+      date, serie,
+      temp: iT >= 0 ? num(c[iT]) : '',
+      ep: iE >= 0 ? (num(c[iE]) !== '' ? num(c[iE]) : str(c[iE]).trim()) : '',
+      dur: iDurW >= 0 ? (num(c[iDurW]) || 0) : 0,
+    });
   }
   console.log(`Aba "Assistimos": ${watched.length} itens.`);
 } catch (e) {

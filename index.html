@@ -260,7 +260,19 @@ function renderCurrent(){
 }
 
 let wpage=0;
-const epKey=ep=>{const m=(ep||'').match(/(\d+)\D+(\d+)/);return m?[+m[1],+m[2]]:[0,0];};
+// rótulo tipo "11x12" a partir de temporada/episódio (ou texto livre no ep)
+const epLabel=w=>{
+  const t=w.temp,e=w.ep;
+  if(t!==''&&t!=null&&e!==''&&e!=null&&isFinite(t)&&isFinite(e))
+    return `${t}x${String(e).padStart(2,'0')}`;
+  return e!==''&&e!=null?String(e):'';
+};
+const epKeyOf=w=>{
+  const t=parseFloat(w.temp),e=parseFloat(w.ep);
+  if(isFinite(t)||isFinite(e))return [isFinite(t)?t:0,isFinite(e)?e:0];
+  const m=String(w.ep||'').match(/(\d+)\D+(\d+)/);
+  return m?[+m[1],+m[2]]:[0,0];
+};
 
 function renderWatched(){
   const wrap=document.getElementById('watchWrap');
@@ -269,18 +281,20 @@ function renderWatched(){
   if(!items.length){wrap.hidden=true;return;}
   wrap.hidden=false;
 
+  const totMin=items.reduce((s,w)=>s+(+w.dur||0),0);
   const bySerie={};
   items.forEach(w=>{(bySerie[w.serie]=bySerie[w.serie]||[]).push(w);});
   const series=Object.keys(bySerie).sort((a,b)=>
     bySerie[b][bySerie[b].length-1].date.localeCompare(bySerie[a][bySerie[a].length-1].date));
   const chips=series.map(s=>{
-    const eps=bySerie[s].map(w=>w.ep).filter(Boolean)
-      .sort((a,b)=>{const x=epKey(a),y=epKey(b);return x[0]-y[0]||x[1]-y[1];});
+    const g=[...bySerie[s]].sort((a,b)=>{const x=epKeyOf(a),y=epKeyOf(b);return x[0]-y[0]||x[1]-y[1];});
+    const eps=g.map(epLabel).filter(Boolean);
     const range=eps.length>1?` (${eps[0]} → ${eps[eps.length-1]})`:(eps[0]?` (${eps[0]})`:'');
-    return `<span class="chip">${s} · ${bySerie[s].length}${range}</span>`;
+    const mins=g.reduce((x,w)=>x+(+w.dur||0),0);
+    return `<span class="chip">${s} · ${g.length} ep${g.length===1?'':'s'}${mins?' · '+fmtDur(mins):''}${range}</span>`;
   }).join('');
   document.getElementById('watchSummary').innerHTML=
-    `<div class="wtot">${items.length} episódio${items.length===1?'':'s'} · ${series.length} série${series.length===1?'':'s'}</div>
+    `<div class="wtot">${items.length} episódio${items.length===1?'':'s'}${totMin?` · ${fmtDur(totMin)} juntas`:''} · ${series.length} série${series.length===1?'':'s'}</div>
      <div class="chips">${chips}</div>`;
 
   const days=[...new Set(items.map(w=>w.date))].sort().reverse();
@@ -290,10 +304,11 @@ function renderWatched(){
   const slice=days.slice(wpage*PER_PAGE,wpage*PER_PAGE+PER_PAGE);
   document.getElementById('watchList').innerHTML=slice.map(d=>{
     const di=items.filter(w=>w.date===d);
-    const byS={};di.forEach(w=>{(byS[w.serie]=byS[w.serie]||[]).push(w.ep);});
+    const dayMin=di.reduce((x,w)=>x+(+w.dur||0),0);
+    const byS={};di.forEach(w=>{(byS[w.serie]=byS[w.serie]||[]).push(epLabel(w));});
     const txt=Object.entries(byS).map(([s,eps])=>(s+' '+eps.filter(Boolean).join(', ')).trim()).join(' · ');
     return `<div class="call"><div><div>${new Date(d+'T00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'})}</div>
-      <div class="meta">${txt}</div></div><div class="dur">${di.length}</div></div>`;
+      <div class="meta">${txt}</div></div><div class="dur">${dayMin?fmtDur(dayMin):di.length+' ep'}</div></div>`;
   }).join('');
   const wp=document.getElementById('wpager');
   wp.hidden=days.length<=PER_PAGE;
