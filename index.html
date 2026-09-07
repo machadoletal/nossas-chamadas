@@ -66,7 +66,11 @@
   .cdbreak span{display:flex;flex-direction:column;align-items:center;line-height:1.05}
   .cdbreak b{font-size:1.9rem;font-weight:800;color:var(--accent);letter-spacing:0}
   .cdbreak.done{font-size:1.8rem;color:var(--accent);text-transform:none}
-  .clocks{display:flex;gap:24px;flex-wrap:wrap;margin-top:6px}
+  .topcards{display:grid;grid-template-columns:3fr 2fr;gap:14px;align-items:stretch}
+  .topcards .card{margin-bottom:0;display:flex;flex-direction:column;justify-content:center}
+  .topcards .card+.card{align-items:center}
+  @media(max-width:680px){.topcards{grid-template-columns:1fr}.topcards .card+.card{align-items:flex-start}}
+  .clocks{display:flex;gap:24px;flex-wrap:wrap}
   .clocks .l{color:var(--muted);font-size:.8rem}
   .clocks .t{font-size:1.15rem;font-weight:700}
   .empty{color:var(--muted)}
@@ -85,13 +89,17 @@
 <h1>Nossas Chamadas 💛</h1>
 <p class="sub">Quanto tempo a gente passa juntas, mesmo longe.</p>
 
-<div class="card">
-  <div class="cdbreak" id="countdown">—</div>
-  <div class="meta" id="countdownLabel"></div>
-  <div class="clocks">
-    <div><div class="l">São Paulo</div><div class="t" id="clkSP">—</div></div>
-    <div><div class="l">Nova York</div><div class="t" id="clkNY">—</div></div>
-    <div><div class="l">diferença</div><div class="t" id="clkDiff">—</div></div>
+<div class="topcards">
+  <div class="card">
+    <div class="cdbreak" id="countdown">—</div>
+    <div class="meta" id="countdownLabel"></div>
+  </div>
+  <div class="card">
+    <div class="clocks">
+      <div><div class="l">São Paulo</div><div class="t" id="clkSP">—</div></div>
+      <div><div class="l">Nova York</div><div class="t" id="clkNY">—</div></div>
+      <div><div class="l">diferença</div><div class="t" id="clkDiff">—</div></div>
+    </div>
   </div>
 </div>
 
