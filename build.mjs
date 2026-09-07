@@ -1,5 +1,5 @@
 // Roda no GitHub Actions: lê a planilha (ID vem de vars.SHEET_ID, nunca do código),
-// converte para chamadas e injeta os dados dentro de _site/index.html.
+// converte para chamadas + o que assistimos, e injeta tudo dentro de _site/index.html.
 // Assim o ID da planilha não chega em nenhum navegador.
 import { readFile, writeFile, mkdir, cp } from 'node:fs/promises';
 
@@ -20,19 +20,6 @@ const normDate = (s) => {
   if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   return '';
 };
-
-const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?tqx=out:json&headers=1`;
-const res = await fetch(url, { redirect: 'follow' });
-if (!res.ok) { console.error('HTTP', res.status, 'ao ler a planilha'); process.exit(1); }
-const raw = await res.text();
-const json = JSON.parse(raw.replace(/^[^{]*/, '').replace(/[^}]*$/, ''));
-const t = json.table;
-
-const labels = t.cols.map((c) => (c.label || '').trim().toLowerCase());
-const col = (n) => labels.findIndex((h) => h.startsWith(n));
-let iD = col('data'), iDur = col('dura'), iT = col('tipo'), iP = col('plata'), iQ = col('quem'), iN = col('nota');
-if (iD < 0 && iDur < 0) { iD = 0; iDur = 2; iT = 3; iP = 4; iQ = 5; iN = 6; }
-
 const str = (c) => (!c ? '' : c.f != null ? String(c.f) : c.v == null ? '' : String(c.v));
 const dt = (c) => {
   if (c && typeof c.v === 'string') {
@@ -42,20 +29,67 @@ const dt = (c) => {
   return normDate(str(c));
 };
 
-const calls = [];
-for (const r of t.rows || []) {
-  const c = r.c || [];
-  const date = dt(c[iD]);
-  const dur = parseFloat(str(c[iDur]).replace(',', '.'));
-  if (!date || !dur || dur < 1) continue;
-  calls.push({
-    date, dur: Math.round(dur), tipo: normTipo(str(c[iT])),
-    plat: str(c[iP]).trim(), init: str(c[iQ]).trim(), note: str(c[iN]).trim(),
-  });
+async function fetchTab(sheetName) {
+  let url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(SHEET_ID)}/gviz/tq?tqx=out:json&headers=1`;
+  if (sheetName) url += `&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const raw = await res.text();
+  const json = JSON.parse(raw.replace(/^[^{]*/, '').replace(/[^}]*$/, ''));
+  if (json.status === 'error') throw new Error(json.errors?.[0]?.detailed_message || 'erro gviz');
+  return json.table;
 }
-if (!calls.length) { console.error('Nenhuma linha válida na planilha'); process.exit(1); }
+const idx = (labels, ...names) => {
+  for (const n of names) { const i = labels.findIndex((h) => h.startsWith(n)); if (i >= 0) return i; }
+  return -1;
+};
 
-const payload = JSON.stringify({ calls, builtAt: new Date().toISOString() });
+// --- chamadas (aba principal) ---
+const t = await fetchTab();
+{
+  const labels = t.cols.map((c) => (c.label || '').trim().toLowerCase());
+  let iD = idx(labels, 'data'), iDur = idx(labels, 'dura'), iT = idx(labels, 'tipo'),
+    iP = idx(labels, 'plata'), iQ = idx(labels, 'quem'), iN = idx(labels, 'nota');
+  if (iD < 0 && iDur < 0) { iD = 0; iDur = 2; iT = 3; iP = 4; iQ = 5; iN = 6; }
+  var calls = [];
+  for (const r of t.rows || []) {
+    const c = r.c || [];
+    const date = dt(c[iD]);
+    const dur = parseFloat(str(c[iDur]).replace(',', '.'));
+    if (!date || !dur || dur < 1) continue;
+    calls.push({
+      date, dur: Math.round(dur), tipo: normTipo(str(c[iT])),
+      plat: str(c[iP]).trim(), init: str(c[iQ]).trim(), note: str(c[iN]).trim(),
+    });
+  }
+}
+if (!calls.length) { console.error('Nenhuma linha válida na aba de chamadas'); process.exit(1); }
+
+// --- o que assistimos (aba "Assistimos", opcional) ---
+let watched = [];
+try {
+  const w = await fetchTab('Assistimos');
+  const labels = w.cols.map((c) => (c.label || '').trim().toLowerCase());
+  const iD = idx(labels, 'data');
+  const iS = idx(labels, 'série', 'serie', 'títu', 'titu', 'o qu');
+  const iE = idx(labels, 'epis', 'ep');
+  // gviz cai na primeira aba quando "Assistimos" não existe — só aceita se as colunas baterem
+  if (iD < 0 || iS < 0 || idx(labels, 'dura') >= 0) {
+    throw new Error('aba não encontrada ou sem as colunas Data/Série');
+  }
+  for (const r of w.rows || []) {
+    const c = r.c || [];
+    const date = dt(c[iD]);
+    const serie = str(c[iS]).trim();
+    if (!date || !serie) continue;
+    watched.push({ date, serie, ep: str(c[iE]).trim() });
+  }
+  console.log(`Aba "Assistimos": ${watched.length} itens.`);
+} catch (e) {
+  console.log(`Sem aba "Assistimos" (${e.message}) — seguindo sem isso.`);
+}
+
+const payload = JSON.stringify({ calls, watched, builtAt: new Date().toISOString() });
 
 let html = await readFile('index.html', 'utf8');
 if (!html.includes('const BUILT_DATA=null;')) {
@@ -67,4 +101,4 @@ html = html.replace('const BUILT_DATA=null;', `const BUILT_DATA=${payload};`);
 await mkdir('_site', { recursive: true });
 await writeFile('_site/index.html', html);
 await cp('README.md', '_site/README.md').catch(() => {});
-console.log(`OK: ${calls.length} chamadas embutidas.`);
+console.log(`OK: ${calls.length} chamadas, ${watched.length} episódios.`);

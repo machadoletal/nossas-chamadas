@@ -17,7 +17,12 @@ números novos (ou rode o workflow na mão em Actions › Deploy › Run workflo
 
 ## Planilha
 
-Colunas: `Data | Início (SP) | Duração (min) | Tipo | Plataforma | Quem ligou | Nota`
+**Aba principal** (chamadas) — colunas:
+`Data | Início (SP) | Duração (min) | Tipo | Plataforma | Quem ligou | Nota`
+
+**Aba `Assistimos`** (opcional, o que assistiram à distância) — colunas:
+`Data | Série | Episódio`. Se a aba não existir, o site simplesmente não mostra
+essa seção.
 
 - **Data**: `AAAA-MM-DD` ou `DD/MM/AAAA`
 - **Tipo**: `Vídeo` ou `Voz`/`Áudio` (o app normaliza)
@@ -36,4 +41,5 @@ O `index.html` do repositório vem sem dados. Para ver números sem publicar, us
 Contagem regressiva até o reencontro (05/12/2026, chegada em NYC), relógios SP/NY
 com a diferença de fuso, tempo total, médias por dia/semana, duração média, maior
 chamada, sequência de dias seguidos, cobertura de dias, tempo em vídeo x áudio,
-gráfico de minutos por dia (com hover) e histórico paginado.
+gráfico de minutos por dia (com hover), histórico paginado e — se a aba
+`Assistimos` existir — o que assistiram juntas, por série e por dia.
