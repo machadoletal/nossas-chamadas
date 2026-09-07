@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nossas Chamadas</title>
+<style>
+  :root{
+    --bg:#0f1020; --card:#1a1b33; --card2:#222345; --line:#33345c;
+    --text:#ececff; --muted:#a3a3c9; --accent:#ff6f91; --accent2:#7a5cff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    padding:20px;max-width:900px;margin:0 auto}
+  h1{font-size:1.6rem;margin-bottom:2px}
+  h2{font-size:1.05rem;margin:24px 0 10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+  .sub{color:var(--muted);margin-bottom:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+  .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  .stat{background:var(--card2);border-radius:12px;padding:14px}
+  .stat .n{font-size:1.5rem;font-weight:700}
+  .stat .l{color:var(--muted);font-size:.85rem}
+  button{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:10px 16px;font:inherit;
+    font-weight:600;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);font-weight:500;padding:6px 12px}
+  .chartwrap{position:relative}
+  .chart{display:flex;align-items:flex-end;gap:3px;height:120px;margin-top:8px;overflow-x:auto}
+  .chart > i{flex:0 0 10px;background:var(--accent2);border-radius:3px 3px 0 0;min-height:2px;cursor:pointer}
+  .chart > i:hover{background:var(--accent)}
+  .tip{position:absolute;pointer-events:none;background:#000;color:#fff;border:1px solid var(--line);
+    border-radius:8px;padding:6px 9px;font-size:.8rem;white-space:nowrap;transform:translate(-50%,-115%);
+    opacity:0;transition:opacity .1s;z-index:5}
+  .tip .m{font-weight:700;color:var(--accent)}
+  .call{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .call:last-child{border:0}
+  .call .meta{color:var(--muted);font-size:.85rem}
+  .call .dur{font-weight:700;white-space:nowrap}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .big{font-size:2rem;font-weight:800;color:var(--accent)}
+  .clocks{display:flex;gap:24px;flex-wrap:wrap;margin-top:6px}
+  .clocks .l{color:var(--muted);font-size:.8rem}
+  .clocks .t{font-size:1.15rem;font-weight:700}
+  .empty{color:var(--muted)}
+  code{background:var(--card2);padding:1px 5px;border-radius:4px;font-size:.85em}
+  .pager{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:12px;
+    padding-top:12px;border-top:1px solid var(--line);color:var(--muted);font-size:.85rem}
+  .pager button{background:var(--card2);color:var(--text);font-weight:600;padding:5px 12px;border-radius:8px}
+  .pager button:disabled{opacity:.35;cursor:default}
+  footer{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);
+    color:var(--muted);font-size:.8rem;line-height:1.7}
+  footer .toolbar{margin-top:8px;gap:6px}
+  footer button{font-size:.78rem;padding:4px 9px}
+  footer button.ghost{background:transparent}
+</style>
+</head>
+<body>
+<h1>Nossas Chamadas 💛</h1>
+<p class="sub">Quanto tempo a gente passa junto, mesmo longe.</p>
+
+<div class="card">
+  <div class="big" id="countdown">—</div>
+  <div class="meta" id="countdownLabel"></div>
+  <div class="clocks">
+    <div><div class="l">São Paulo</div><div class="t" id="clkSP">—</div></div>
+    <div><div class="l">Nova York</div><div class="t" id="clkNY">—</div></div>
+    <div><div class="l">diferença</div><div class="t" id="clkDiff">—</div></div>
+  </div>
+</div>
+
+<h2>Números</h2>
+<div class="grid" id="stats"></div>
+
+<h2>Minutos por dia</h2>
+<div class="card"><div class="chartwrap"><div class="chart" id="chart"></div><div class="tip" id="tip"></div></div></div>
+
+<h2>Histórico</h2>
+<div class="card">
+  <div id="list"></div>
+  <div class="pager" id="pager" hidden>
+    <button id="prev">‹</button>
+    <span id="pageInfo"></span>
+    <button id="next">›</button>
+  </div>
+</div>
+
+<footer>
+  <span id="srcInfo">carregando…</span>
+  <div class="toolbar">
+    <button class="ghost" id="config">Datas</button>
+    <button class="ghost" id="export">Backup</button>
+    <button class="ghost" id="import">Carregar arquivo</button>
+    <input type="file" id="file" accept=".csv,text/csv,application/json,.json" hidden>
+  </div>
+</footer>
+
+<script>
+window.addEventListener('error',e=>{
+  const b=document.getElementById('srcInfo');
+  if(b)b.innerHTML='<span style="color:var(--accent)">Erro no app: '+(e.message||e.error||'?')+'</span>';
+});
+const KEY='nossas-chamadas';
+const DEFAULT_CFG={ inicio:'2026-08-23', reencontro:'2026-12-05' };
+// preenchido no deploy pelo build.mjs (robô que lê a planilha); null no repositório
+const BUILT_DATA=null;
+function load(){
+  let s={};
+  try{ s=JSON.parse(localStorage.getItem(KEY)||'{}')||{}; }catch(e){}
+  return {calls:s.calls||[],cfg:Object.assign({},DEFAULT_CFG,s.cfg||{}),src:s.src||''};
+}
+const save=s=>{ try{ localStorage.setItem(KEY,JSON.stringify(s)); }catch(e){} };
+let state=load();
+
+const fmtDur=m=>{m=Math.round(m||0);const h=Math.floor(m/60),mm=m%60;return h?`${h}h${mm?(' '+mm+'min'):''}`:`${mm}min`};
+const todayISO=()=>new Date().toLocaleDateString('sv');
+
+// aceita "video/vídeo/vid", "voz/audio/áudio/aud"
+function normTipo(t){
+  t=(t||'').toString().trim().toLowerCase();
+  if(t.startsWith('vi')||t.startsWith('ví'))return 'Vídeo';
+  if(t.startsWith('vo')||t.startsWith('a')||t.startsWith('á'))return 'Áudio';
+  return '';
+}
+// aceita AAAA-MM-DD, DD/MM/AAAA, D/M/AAAA
+function normDate(s){
+  s=(s||'').toString().trim();
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m)return `${m[1]}-${m[2]}-${m[3]}`;
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return '';
+}
+
+function tick(){
+  const now=new Date();
+  const opt={hour:'2-digit',minute:'2-digit',hour12:false};
+  document.getElementById('clkSP').textContent=now.toLocaleTimeString('pt-BR',{...opt,timeZone:'America/Sao_Paulo'});
+  document.getElementById('clkNY').textContent=now.toLocaleTimeString('pt-BR',{...opt,timeZone:'America/New_York'});
+  const h=d=>{const p=new Intl.DateTimeFormat('en',{hour:'numeric',hour12:false,timeZone:d}).format(now);return p==='24'?0:+p};
+  let diff=((h('America/Sao_Paulo')-h('America/New_York'))%24+24)%24;
+  if(diff>12)diff-=24;
+  document.getElementById('clkDiff').textContent=(diff>0?'+':'')+diff+'h em SP';
+}
+setInterval(tick,1000);tick();
+
+function render(){
+  const calls=state.calls.map(c=>({...c,tipo:normTipo(c.tipo)})).filter(c=>c.date&&c.dur>0)
+    .sort((a,b)=>a.date<b.date?-1:1);
+  const cfg=state.cfg;
+  const total=calls.reduce((s,c)=>s+c.dur,0);
+
+  updateSrcUI(calls.length);
+
+  const cd=document.getElementById('countdown'), cdl=document.getElementById('countdownLabel');
+  if(cfg.reencontro){
+    const days=Math.ceil((new Date(cfg.reencontro+'T00:00')-new Date(todayISO()+'T00:00'))/864e5);
+    cd.textContent=days>1?`${days} dias`:(days===1?'amanhã! ✈️':(days===0?'é hoje! ✈️':'💛 juntos'));
+    cdl.textContent=days>=0?`até o reencontro em Nova York (${new Date(cfg.reencontro+'T00:00').toLocaleDateString('pt-BR')})`:'';
+  } else {cd.textContent='—';cdl.textContent=''}
+
+  const stats=document.getElementById('stats');
+  const list=document.getElementById('list');
+  if(!calls.length){
+    stats.innerHTML='';
+    list.innerHTML='<div class="empty">Nenhuma chamada carregada. Use os botões acima.</div>';
+    document.getElementById('chart').innerHTML='';
+    return;
+  }
+
+  let firstDate=cfg.inicio&&cfg.inicio<calls[0].date?cfg.inicio:calls[0].date;
+  const daysTracked=Math.max(1,Math.round((new Date(todayISO()+'T00:00')-new Date(firstDate+'T00:00'))/864e5)+1);
+  const byDay={};calls.forEach(c=>byDay[c.date]=(byDay[c.date]||0)+c.dur);
+  const longest=calls.reduce((m,c)=>Math.max(m,c.dur),0);
+  const vid=calls.filter(c=>c.tipo==='Vídeo').reduce((s,c)=>s+c.dur,0);
+  const aud=calls.filter(c=>c.tipo==='Áudio').reduce((s,c)=>s+c.dur,0);
+
+  let streak=0;let cur=new Date(todayISO()+'T00:00');
+  if(!byDay[cur.toLocaleDateString('sv')])cur.setDate(cur.getDate()-1);
+  while(byDay[cur.toLocaleDateString('sv')]){streak++;cur.setDate(cur.getDate()-1)}
+
+  const S=[
+    ['Tempo total',fmtDur(total)],
+    ['Chamadas',calls.length],
+    ['Média / dia',fmtDur(total/daysTracked)],
+    ['Média / semana',fmtDur(total/daysTracked*7)],
+    ['Duração média',fmtDur(total/calls.length)],
+    ['Maior chamada',fmtDur(longest)],
+    ['Dias com chamada',`${Object.keys(byDay).length} / ${daysTracked}`],
+    ['Sequência atual',`${streak} dia${streak===1?'':'s'}`],
+    ['Tempo em vídeo',fmtDur(vid)],
+    ['Tempo em áudio',fmtDur(aud)],
+  ];
+  stats.innerHTML=S.map(([l,n])=>`<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+
+  const chart=document.getElementById('chart');
+  const end=new Date(todayISO()+'T00:00');
+  const startDays=Math.max(30,Math.min(120,daysTracked));
+  const start=new Date(end);start.setDate(start.getDate()-startDays+1);
+  const max=Math.max(60,...Object.values(byDay));
+  let bars='';
+  for(let dt=new Date(start);dt<=end;dt.setDate(dt.getDate()+1)){
+    const k=dt.toLocaleDateString('sv');const v=byDay[k]||0;
+    const lbl=new Date(k+'T00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
+    bars+=`<i data-lbl="${lbl}" data-min="${v?fmtDur(v):'sem chamada'}" style="height:${v/max*100}%;${v?'':'opacity:.25'}"></i>`;
+  }
+  chart.innerHTML=bars;
+
+  renderList(calls);
+}
+
+let histPage=0;
+const PER_PAGE=15;
+
+function renderList(callsSorted){
+  const list=document.getElementById('list');
+  const pager=document.getElementById('pager');
+  const items=[...(callsSorted||[])].reverse();
+  const pages=Math.max(1,Math.ceil(items.length/PER_PAGE));
+  if(histPage>=pages)histPage=pages-1;
+  if(histPage<0)histPage=0;
+  const slice=items.slice(histPage*PER_PAGE,histPage*PER_PAGE+PER_PAGE);
+  list.innerHTML=slice.map(c=>`<div class="call">
+    <div><div>${new Date(c.date+'T00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'})}</div>
+    <div class="meta">${[c.tipo,c.plat,c.init&&('ligou: '+c.init),c.note].filter(Boolean).join(' · ')||'—'}</div></div>
+    <div class="dur">${fmtDur(c.dur)}</div>
+  </div>`).join('')||'<div class="empty">Nenhuma chamada.</div>';
+  pager.hidden=items.length<=PER_PAGE;
+  document.getElementById('pageInfo').textContent=
+    `${histPage*PER_PAGE+1}–${histPage*PER_PAGE+slice.length} de ${items.length}`;
+  document.getElementById('prev').disabled=histPage===0;
+  document.getElementById('next').disabled=histPage>=pages-1;
+}
+
+document.getElementById('prev').onclick=()=>{histPage--;renderCurrent();};
+document.getElementById('next').onclick=()=>{histPage++;renderCurrent();};
+function renderCurrent(){
+  renderList(state.calls.map(c=>({...c,tipo:normTipo(c.tipo)})).filter(c=>c.date&&c.dur>0)
+    .sort((a,b)=>a.date<b.date?-1:1));
+}
+
+// tooltip do gráfico
+(function(){
+  const chart=document.getElementById('chart'), tip=document.getElementById('tip');
+  const wrap=chart.parentElement;
+  chart.addEventListener('mousemove',e=>{
+    const i=e.target.closest('i[data-lbl]');
+    if(!i){tip.style.opacity=0;return;}
+    const wr=wrap.getBoundingClientRect(), br=i.getBoundingClientRect();
+    tip.innerHTML=`${i.dataset.lbl} · <span class="m">${i.dataset.min}</span>`;
+    tip.style.left=(br.left-wr.left+br.width/2)+'px';
+    tip.style.top=(br.top-wr.top)+'px';
+    tip.style.opacity=1;
+  });
+  chart.addEventListener('mouseleave',()=>{tip.style.opacity=0;});
+})();
+
+function parseCSV(txt){
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<txt.length;i++){const ch=txt[i];
+    if(q){ if(ch==='"'){ if(txt[i+1]==='"'){cur+='"';i++} else q=false } else cur+=ch }
+    else if(ch==='"')q=true;
+    else if(ch===','){row.push(cur);cur=''}
+    else if(ch==='\n'||ch==='\r'){ if(ch==='\r'&&txt[i+1]==='\n')i++; row.push(cur);rows.push(row);row=[];cur='' }
+    else cur+=ch;
+  }
+  if(cur!==''||row.length){row.push(cur);rows.push(row)}
+  return rows.filter(r=>r.some(c=>c.trim()!==''));
+}
+
+function callsFromCSV(txt){
+  const rows=parseCSV(txt);
+  if(!rows.length)throw new Error('vazio');
+  const head=rows.shift().map(h=>h.trim().toLowerCase());
+  const col=n=>head.findIndex(h=>h.startsWith(n));
+  const iD=col('data'),iDur=col('dura'),iT=col('tipo'),iP=col('plata'),iQ=col('quem'),iN=col('nota');
+  if(iD<0||iDur<0)throw new Error('colunas Data/Duração não encontradas');
+  const calls=[];
+  rows.forEach(rw=>{
+    const date=normDate(rw[iD]);
+    const dur=parseFloat((rw[iDur]||'').toString().replace(',','.'));
+    if(!date||!dur||dur<1)return;
+    calls.push({date,dur:Math.round(dur),tipo:normTipo(rw[iT]),
+      plat:(rw[iP]||'').trim(),init:(rw[iQ]||'').trim(),note:(rw[iN]||'').trim()});
+  });
+  if(!calls.length)throw new Error('nenhuma linha válida — confira o formato das datas');
+  return calls;
+}
+
+function loadText(txt,srcLabel){
+  txt=txt.trim();
+  if(txt[0]==='{'){
+    const d=JSON.parse(txt);
+    if(!Array.isArray(d.calls))throw new Error('JSON sem "calls"');
+    state.calls=d.calls;
+    if(d.cfg)state.cfg=Object.assign({},state.cfg,d.cfg);
+  } else {
+    state.calls=callsFromCSV(txt);
+  }
+  state.src=srcLabel;
+  histPage=0;
+  save(state);render();
+}
+
+document.getElementById('import').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{
+    loadText(r.result,`arquivo ${f.name} · ${new Date().toLocaleString('pt-BR')}`);
+    alert(`Carregado: ${state.calls.length} chamada(s).`);
+  }catch(err){alert('Não deu pra ler: '+err.message);}};
+  r.readAsText(f);
+};
+
+function updateSrcUI(n){
+  const info=document.getElementById('srcInfo');
+  if(!n){info.textContent='nenhum dado — use "Carregar arquivo"';return;}
+  info.textContent=state.src?`dados da planilha · ${state.src}`:`${n} chamadas`;
+}
+
+document.getElementById('config').onclick=()=>{
+  const c=state.cfg;
+  const inicio=prompt('Data de início do intercâmbio (AAAA-MM-DD):',c.inicio||'');
+  if(inicio===null)return;
+  const reencontro=prompt('Data do reencontro (AAAA-MM-DD):',c.reencontro||'');
+  if(reencontro===null)return;
+  state.cfg=Object.assign({},c,{inicio:inicio.trim(),reencontro:reencontro.trim()});
+  save(state);render();
+};
+
+document.getElementById('export').onclick=()=>{
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='nossas-chamadas-backup.json';a.click();
+};
+
+// dados vêm embutidos no deploy (robô lê a planilha a cada ~2h); localStorage é só cache offline
+if(BUILT_DATA&&Array.isArray(BUILT_DATA.calls)){
+  state.calls=BUILT_DATA.calls;
+  state.src=BUILT_DATA.builtAt
+    ? new Date(BUILT_DATA.builtAt).toLocaleString('pt-BR')+' (atualiza a cada ~2h)'
+    : '';
+  histPage=0;save(state);
+}
+render();
+</script>
+</body>
+</html>

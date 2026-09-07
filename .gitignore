@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+
+# snapshot local de dados (não versionar)
+dados-*.json
+nossas-chamadas-backup.json
+_site/
