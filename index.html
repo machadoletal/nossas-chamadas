@@ -8,10 +8,11 @@
   :root{
     --bg:#0f1020; --card:#1a1b33; --card2:#222345; --line:#33345c;
     --text:#ececff; --muted:#a3a3c9; --accent:#ff6f91; --accent2:#7a5cff;
+    --watch:#38d9c4;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    padding:20px;max-width:900px;margin:0 auto}
+    padding:20px;max-width:1000px;margin:0 auto}
   h1{font-size:1.6rem;margin-bottom:2px}
   h2{font-size:1.05rem;margin:24px 0 10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
   .sub{color:var(--muted);margin-bottom:20px}
@@ -25,12 +26,25 @@
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);font-weight:500;padding:6px 12px}
   .chartwrap{position:relative}
   .chart{display:flex;align-items:flex-end;gap:3px;height:120px;margin-top:8px;overflow-x:auto}
-  .chart > i{flex:1 0 9px;max-width:26px;background:var(--accent2);border-radius:3px 3px 0 0;min-height:2px;cursor:pointer}
-  .chart > i:hover{background:var(--accent)}
+  .chart > i{flex:1 0 9px;max-width:26px;min-height:2px;cursor:pointer;display:flex;flex-direction:column;
+    justify-content:flex-end;border-radius:3px 3px 0 0;overflow:hidden}
+  .chart > i > b{display:block;width:100%}
+  .chart > i > b.c{background:var(--accent2)}
+  .chart > i > b.w{background:var(--watch)}
+  .chart > i.empty{background:var(--accent2);opacity:.22}
+  .chart > i:hover{filter:brightness(1.18)}
+  .legend{display:flex;gap:16px;margin-top:10px;font-size:.8rem;color:var(--muted)}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle}
   .tip{position:absolute;pointer-events:none;background:#000;color:#fff;border:1px solid var(--line);
     border-radius:8px;padding:6px 9px;font-size:.8rem;white-space:nowrap;transform:translate(-50%,-115%);
-    opacity:0;transition:opacity .1s;z-index:5}
-  .tip .m{font-weight:700;color:var(--accent)}
+    opacity:0;transition:opacity .1s;z-index:5;line-height:1.4}
+  .tip b{font-weight:700}
+  .tip .c{color:#a99bff}
+  .tip .w{color:var(--watch)}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+  .cols.solo{grid-template-columns:1fr}
+  .cols h2{margin-top:6px}
+  @media(max-width:680px){.cols{grid-template-columns:1fr}}
   .call{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
   .call:last-child{border:0}
   .call .meta{color:var(--muted);font-size:.85rem}
@@ -74,28 +88,38 @@
 <div class="grid" id="stats"></div>
 
 <h2>Minutos por dia</h2>
-<div class="card"><div class="chartwrap"><div class="chart" id="chart"></div><div class="tip" id="tip"></div></div></div>
-
-<div id="watchWrap" hidden>
-  <h2>Assistindo juntas</h2>
-  <div class="card">
-    <div id="watchSummary"></div>
-    <div id="watchList"></div>
-    <div class="pager" id="wpager" hidden>
-      <button id="wprev">‹</button>
-      <span id="wpageInfo"></span>
-      <button id="wnext">›</button>
-    </div>
+<div class="card">
+  <div class="chartwrap"><div class="chart" id="chart"></div><div class="tip" id="tip"></div></div>
+  <div class="legend">
+    <span><i style="background:var(--accent2)"></i>conversa</span>
+    <span id="legWatch" hidden><i style="background:var(--watch)"></i>assistindo juntas</span>
   </div>
 </div>
 
-<h2>Histórico</h2>
-<div class="card">
-  <div id="list"></div>
-  <div class="pager" id="pager" hidden>
-    <button id="prev">‹</button>
-    <span id="pageInfo"></span>
-    <button id="next">›</button>
+<div class="cols" id="histCols">
+  <div id="watchWrap" hidden>
+    <h2>Assistindo juntas</h2>
+    <div class="card">
+      <div id="watchSummary"></div>
+      <div id="watchList"></div>
+      <div class="pager" id="wpager" hidden>
+        <button id="wprev">‹</button>
+        <span id="wpageInfo"></span>
+        <button id="wnext">›</button>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <h2>Histórico de ligações</h2>
+    <div class="card">
+      <div id="list"></div>
+      <div class="pager" id="pager" hidden>
+        <button id="prev">‹</button>
+        <span id="pageInfo"></span>
+        <button id="next">›</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -202,12 +226,13 @@ function render(){
   const watchedItems=(state.watched||[]).filter(w=>w&&w.date&&w.serie);
   const watchedMin=watchedItems.reduce((s,w)=>s+(+w.dur||0),0);
 
+  const byWatch={};watchedItems.forEach(w=>byWatch[w.date]=(byWatch[w.date]||0)+(+w.dur||0));
+
   const S=[
     ['Tempo total em chamada',fmtDur(total)],
     ['Chamadas',calls.length],
     ['Média / dia',fmtDur(total/daysTracked)],
     ['Média / semana',fmtDur(total/daysTracked*7)],
-    ['Duração média',fmtDur(total/calls.length)],
     ['Maior chamada',fmtDur(longest)],
     ['Dias com chamada',`${Object.keys(byDay).length} / ${daysTracked}`],
     ['Sequência atual',`${streak} dia${streak===1?'':'s'}`],
@@ -221,12 +246,22 @@ function render(){
   const end=new Date(todayISO()+'T00:00');
   // começa no início do rastreio (não enche de dias vazios antes disso); teto de 120 dias
   const start=new Date(Math.max(new Date(firstDate+'T00:00'), end-119*864e5));
-  const max=Math.max(60,...Object.values(byDay));
+  const hasWatch=watchedMin>0;
+  document.getElementById('legWatch').hidden=!hasWatch;
+  let max=60;
+  for(let dt=new Date(start);dt<=end;dt.setDate(dt.getDate()+1)){
+    const k=dt.toLocaleDateString('sv');
+    max=Math.max(max,(byDay[k]||0)+(byWatch[k]||0));
+  }
   let bars='';
   for(let dt=new Date(start);dt<=end;dt.setDate(dt.getDate()+1)){
-    const k=dt.toLocaleDateString('sv');const v=byDay[k]||0;
+    const k=dt.toLocaleDateString('sv');
+    const cv=byDay[k]||0, wv=byWatch[k]||0, tv=cv+wv;
     const lbl=new Date(k+'T00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
-    bars+=`<i data-lbl="${lbl}" data-min="${v?fmtDur(v):'sem chamada'}" style="height:${v/max*100}%;${v?'':'opacity:.25'}"></i>`;
+    if(!tv){bars+=`<i class="empty" data-lbl="${lbl}" data-c="0" data-w="0" style="height:2px"></i>`;continue;}
+    const seg=(cls,val)=>val?`<b class="${cls}" style="height:${val/tv*100}%"></b>`:'';
+    bars+=`<i data-lbl="${lbl}" data-c="${cv}" data-w="${wv}" style="height:${tv/max*100}%">`+
+      seg('w',wv)+seg('c',cv)+`</i>`;
   }
   chart.innerHTML=bars;
 
@@ -282,8 +317,8 @@ function renderWatched(){
   const wrap=document.getElementById('watchWrap');
   const items=(state.watched||[]).filter(w=>w&&w.date&&w.serie)
     .sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
-  if(!items.length){wrap.hidden=true;return;}
-  wrap.hidden=false;
+  if(!items.length){wrap.hidden=true;document.getElementById('histCols').classList.add('solo');return;}
+  wrap.hidden=false;document.getElementById('histCols').classList.remove('solo');
 
   const totMin=items.reduce((s,w)=>s+(+w.dur||0),0);
   const bySerie={};
@@ -332,7 +367,12 @@ document.getElementById('wnext').onclick=()=>{wpage++;renderWatched();};
     const i=e.target.closest('i[data-lbl]');
     if(!i){tip.style.opacity=0;return;}
     const wr=wrap.getBoundingClientRect(), br=i.getBoundingClientRect();
-    tip.innerHTML=`${i.dataset.lbl} · <span class="m">${i.dataset.min}</span>`;
+    const cv=+i.dataset.c||0, wv=+i.dataset.w||0;
+    let body;
+    if(!cv&&!wv) body='sem chamada';
+    else if(wv) body=`<span class="c"><b>${fmtDur(cv)}</b> conversa</span><br><span class="w"><b>${fmtDur(wv)}</b> assistindo</span>`;
+    else body=`<b>${fmtDur(cv)}</b> em chamada`;
+    tip.innerHTML=`${i.dataset.lbl}<br>${body}`;
     tip.style.left=(br.left-wr.left+br.width/2)+'px';
     tip.style.top=(br.top-wr.top)+'px';
     tip.style.opacity=1;
