@@ -199,8 +199,11 @@ function render(){
   if(!byDay[cur.toLocaleDateString('sv')])cur.setDate(cur.getDate()-1);
   while(byDay[cur.toLocaleDateString('sv')]){streak++;cur.setDate(cur.getDate()-1)}
 
+  const watchedItems=(state.watched||[]).filter(w=>w&&w.date&&w.serie);
+  const watchedMin=watchedItems.reduce((s,w)=>s+(+w.dur||0),0);
+
   const S=[
-    ['Tempo total',fmtDur(total)],
+    ['Tempo total em chamada',fmtDur(total)],
     ['Chamadas',calls.length],
     ['Média / dia',fmtDur(total/daysTracked)],
     ['Média / semana',fmtDur(total/daysTracked*7)],
@@ -211,6 +214,7 @@ function render(){
     ['Tempo em vídeo',fmtDur(vid)],
     ['Tempo em áudio',fmtDur(aud)],
   ];
+  if(watchedMin)S.push(['Assistindo juntas',fmtDur(watchedMin)]);
   stats.innerHTML=S.map(([l,n])=>`<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
 
   const chart=document.getElementById('chart');
