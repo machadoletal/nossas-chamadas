@@ -270,10 +270,10 @@ function render(){
   const byWatch={};watchedItems.forEach(w=>byWatch[w.date]=(byWatch[w.date]||0)+(+w.dur||0));
 
   const S=[
-    ['Tempo total em chamada',fmtDur(total)],
     ['Chamadas',calls.length],
-    ['Média / dia',fmtDur(total/daysTracked)],
+    ['Tempo total em chamada',fmtDur(total)],
     ['Média / semana',fmtDur(total/daysTracked*7)],
+    ['Média / dia',fmtDur(total/daysTracked)],
     ['Maior chamada',fmtDur(longest)],
     ['Dias com chamada',`${Object.keys(byDay).length} / ${daysTracked}`],
     ['Sequência atual',`${streak} dia${streak===1?'':'s'}`],
