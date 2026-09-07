@@ -25,7 +25,7 @@
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);font-weight:500;padding:6px 12px}
   .chartwrap{position:relative}
   .chart{display:flex;align-items:flex-end;gap:3px;height:120px;margin-top:8px;overflow-x:auto}
-  .chart > i{flex:0 0 10px;background:var(--accent2);border-radius:3px 3px 0 0;min-height:2px;cursor:pointer}
+  .chart > i{flex:1 0 9px;max-width:26px;background:var(--accent2);border-radius:3px 3px 0 0;min-height:2px;cursor:pointer}
   .chart > i:hover{background:var(--accent)}
   .tip{position:absolute;pointer-events:none;background:#000;color:#fff;border:1px solid var(--line);
     border-radius:8px;padding:6px 9px;font-size:.8rem;white-space:nowrap;transform:translate(-50%,-115%);
@@ -99,13 +99,18 @@ window.addEventListener('error',e=>{
   if(b)b.innerHTML='<span style="color:var(--accent)">Erro no app: '+(e.message||e.error||'?')+'</span>';
 });
 const KEY='nossas-chamadas';
-const DEFAULT_CFG={ inicio:'2026-08-23', reencontro:'2026-12-05' };
+// v: sobe quando as datas padrão mudam, pra reaplicar em quem já tem cfg salvo
+const DEFAULT_CFG={ inicio:'2026-08-24', reencontro:'2026-12-05', v:2 };
 // preenchido no deploy pelo build.mjs (robô que lê a planilha); null no repositório
 const BUILT_DATA=null;
 function load(){
   let s={};
   try{ s=JSON.parse(localStorage.getItem(KEY)||'{}')||{}; }catch(e){}
-  return {calls:s.calls||[],cfg:Object.assign({},DEFAULT_CFG,s.cfg||{}),src:s.src||''};
+  const cfg=Object.assign({},DEFAULT_CFG,s.cfg||{});
+  if((s.cfg&&s.cfg.v||0)<DEFAULT_CFG.v){
+    cfg.inicio=DEFAULT_CFG.inicio;cfg.reencontro=DEFAULT_CFG.reencontro;cfg.v=DEFAULT_CFG.v;
+  }
+  return {calls:s.calls||[],cfg,src:s.src||''};
 }
 const save=s=>{ try{ localStorage.setItem(KEY,JSON.stringify(s)); }catch(e){} };
 let state=load();
@@ -193,8 +198,8 @@ function render(){
 
   const chart=document.getElementById('chart');
   const end=new Date(todayISO()+'T00:00');
-  const startDays=Math.max(30,Math.min(120,daysTracked));
-  const start=new Date(end);start.setDate(start.getDate()-startDays+1);
+  // começa no início do rastreio (não enche de dias vazios antes disso); teto de 120 dias
+  const start=new Date(Math.max(new Date(firstDate+'T00:00'), end-119*864e5));
   const max=Math.max(60,...Object.values(byDay));
   let bars='';
   for(let dt=new Date(start);dt<=end;dt.setDate(dt.getDate()+1)){
