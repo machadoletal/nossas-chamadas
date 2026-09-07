@@ -45,10 +45,15 @@
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
   .cols.solo{grid-template-columns:1fr}
   .cols h2{margin-top:6px}
-  .cols .card{height:420px;display:flex;flex-direction:column;overflow:hidden;margin-bottom:0}
+  .cols .card{height:448px;display:flex;flex-direction:column;overflow:hidden;margin-bottom:0}
   .cols.solo .card{height:auto;max-height:560px}
   .scroll{flex:1;min-height:0;overflow-y:auto}
+  .paged{flex:1;min-height:0;overflow:hidden}
   #watchSummary{flex:none}
+  .pager{flex:none;display:flex;align-items:center;justify-content:center;gap:12px;
+    margin-top:8px;padding-top:10px;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+  .pager button{background:var(--card2);color:var(--text);font-weight:700;padding:3px 11px;border-radius:8px}
+  .pager button:disabled{opacity:.35;cursor:default}
   @media(max-width:680px){.cols{grid-template-columns:1fr}}
   .call{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
   .call:last-child{border:0}
@@ -56,6 +61,11 @@
   .call .dur{font-weight:700;white-space:nowrap}
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
   .big{font-size:2rem;font-weight:800;color:var(--accent)}
+  .cdbreak{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;font-size:.8rem;
+    color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .cdbreak span{display:flex;flex-direction:column;align-items:center;line-height:1.05}
+  .cdbreak b{font-size:1.9rem;font-weight:800;color:var(--accent);letter-spacing:0}
+  .cdbreak.done{font-size:1.8rem;color:var(--accent);text-transform:none}
   .clocks{display:flex;gap:24px;flex-wrap:wrap;margin-top:6px}
   .clocks .l{color:var(--muted);font-size:.8rem}
   .clocks .t{font-size:1.15rem;font-weight:700}
@@ -76,7 +86,7 @@
 <p class="sub">Quanto tempo a gente passa juntas, mesmo longe.</p>
 
 <div class="card">
-  <div class="big" id="countdown">—</div>
+  <div class="cdbreak" id="countdown">—</div>
   <div class="meta" id="countdownLabel"></div>
   <div class="clocks">
     <div><div class="l">São Paulo</div><div class="t" id="clkSP">—</div></div>
@@ -109,7 +119,12 @@
   <div>
     <h2>Histórico de ligações</h2>
     <div class="card">
-      <div id="list" class="scroll"></div>
+      <div id="list" class="paged"></div>
+      <div class="pager" id="pager" hidden>
+        <button id="prev">‹</button>
+        <span id="pageInfo"></span>
+        <button id="next">›</button>
+      </div>
     </div>
   </div>
 </div>
@@ -175,6 +190,39 @@ function tick(){
   let diff=((h('America/Sao_Paulo')-h('America/New_York'))%24+24)%24;
   if(diff>12)diff-=24;
   document.getElementById('clkDiff').textContent=(diff>0?'+':'')+diff+'h em SP';
+  renderCountdown();
+}
+
+function renderCountdown(){
+  const cd=document.getElementById('countdown'), cdl=document.getElementById('countdownLabel');
+  const r=state.cfg.reencontro;
+  if(!r){cd.textContent='—';cdl.textContent='';return;}
+  const arr=new Date(/[T ]/.test(r)?r:r+'T00:00');
+  const now=new Date();
+  const iso=/[T ]/.test(r);
+  const nyDate=arr.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:iso?'America/New_York':undefined});
+  const nyTime=arr.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/New_York'});
+  if(arr<=now){
+    cd.className='cdbreak done';cd.textContent='💛 juntas em Nova York';
+    cdl.textContent='';
+    return;
+  }
+  // meses cheios, depois o resto em semanas/dias/h/m/s
+  let months=(arr.getFullYear()-now.getFullYear())*12+(arr.getMonth()-now.getMonth());
+  let probe=new Date(now); probe.setMonth(probe.getMonth()+months);
+  if(probe>arr){months--;probe=new Date(now);probe.setMonth(probe.getMonth()+months);}
+  let rest=arr-probe;
+  const dTot=Math.floor(rest/864e5); rest-=dTot*864e5;
+  const weeks=Math.floor(dTot/7), days=dTot%7;
+  const hours=Math.floor(rest/36e5); rest-=hours*36e5;
+  const mins=Math.floor(rest/6e4); rest-=mins*6e4;
+  const secs=Math.floor(rest/1e3);
+  const units=[['meses',months],['sem',weeks],['dias',days],['h',hours],['min',mins],['s',secs]];
+  let seen=false; const show=[];
+  for(const u of units){ if(u[1]>0)seen=true; if(seen||u[0]==='s')show.push(u); }
+  cd.className='cdbreak';
+  cd.innerHTML=show.map(([l,v])=>`<span><b>${v}</b>${l}</span>`).join('');
+  cdl.textContent=`até o reencontro em Nova York — ${nyDate}${iso?`, ${nyTime}`:''}`;
 }
 setInterval(tick,1000);tick();
 
@@ -186,21 +234,7 @@ function render(){
 
   updateSrcUI(calls.length);
   renderWatched();
-
-  const cd=document.getElementById('countdown'), cdl=document.getElementById('countdownLabel');
-  if(cfg.reencontro){
-    // aceita "AAAA-MM-DD" ou ISO completo com hora/fuso (chegada do voo)
-    const arr=new Date(/[T ]/.test(cfg.reencontro)?cfg.reencontro:cfg.reencontro+'T00:00');
-    const ms=arr-new Date();
-    const days=Math.ceil(ms/864e5), hrs=Math.ceil(ms/36e5);
-    cd.textContent=days>1?`${days} dias`
-      :(hrs>1?`faltam ${hrs}h ✈️`:(ms>0?'quase lá! ✈️':'💛 juntas'));
-    const nyDate=arr.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',timeZone:'America/New_York'});
-    const nyTime=arr.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/New_York'});
-    cdl.textContent=ms>-864e5
-      ? `até o reencontro em Nova York — ${nyDate}${/[T ]/.test(cfg.reencontro)?`, ${nyTime}`:''}`
-      : '';
-  } else {cd.textContent='—';cdl.textContent=''}
+  renderCountdown();
 
   const stats=document.getElementById('stats');
   const list=document.getElementById('list');
@@ -269,14 +303,28 @@ function render(){
 
 const dayLabel=k=>new Date(k+'T00:00').toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
 
+let histPage=0, lastCalls=[];
+const PER_PAGE_CALLS=5;
+
 function renderList(callsSorted){
-  const items=[...(callsSorted||[])].reverse();
-  document.getElementById('list').innerHTML=items.map(c=>`<div class="call">
+  if(callsSorted)lastCalls=callsSorted;
+  const items=[...lastCalls].reverse();
+  const pages=Math.max(1,Math.ceil(items.length/PER_PAGE_CALLS));
+  histPage=Math.min(Math.max(0,histPage),pages-1);
+  const from=histPage*PER_PAGE_CALLS, slice=items.slice(from,from+PER_PAGE_CALLS);
+  document.getElementById('list').innerHTML=slice.map(c=>`<div class="call">
     <div><div>${dayLabel(c.date)}</div>
     <div class="meta">${[c.tipo,c.plat,c.init&&('ligou: '+c.init),c.note].filter(Boolean).join(' · ')||'—'}</div></div>
     <div class="dur">${fmtDur(c.dur)}</div>
   </div>`).join('')||'<div class="empty">Nenhuma chamada.</div>';
+  const pager=document.getElementById('pager');
+  pager.hidden=items.length<=PER_PAGE_CALLS;
+  document.getElementById('pageInfo').textContent=items.length?`${from+1}–${from+slice.length} de ${items.length}`:'';
+  document.getElementById('prev').disabled=histPage===0;
+  document.getElementById('next').disabled=histPage>=pages-1;
 }
+document.getElementById('prev').onclick=()=>{histPage--;renderList();};
+document.getElementById('next').onclick=()=>{histPage++;renderList();};
 
 // rótulo tipo "11x12" a partir de temporada/episódio (ou texto livre no ep)
 const epLabel=w=>{
@@ -380,6 +428,7 @@ function loadText(txt,srcLabel){
     state.calls=callsFromCSV(txt);
   }
   state.src=srcLabel;
+  histPage=0;
   save(state);render();
 }
 
